@@ -1,78 +1,118 @@
-# CombineCode
+# File Concatenator
 
-A modern web application for intelligent file concatenation, built with FastAPI. CombineCode helps you combine multiple files while respecting `.gitignore` rules and custom ignore patterns.
+A powerful web application that combines multiple files into a single document while providing comprehensive codebase statistics.
 
 ## Features
 
-- 🔍 Smart file concatenation with `.gitignore` support
-- 🎯 Custom file ignore patterns with glob syntax
-- 🎨 Clean web interface
-- ⚡ Asynchronous file processing
-- 📝 Detailed logging with emoji indicators
-- 🔒 Secure file handling with error protection
+### Core Functionality
+- 📁 Concatenate files from any directory
+- 🔍 Respect `.gitignore` rules and custom ignore patterns
+- ⚡ Asynchronous file processing for better performance
+- 📊 Comprehensive codebase statistics
 
-## Prerequisites
+### Statistics & Analysis
+- **File Analysis**
+  - Total files processed and skipped
+  - File type distribution
+  - Total size and line counts
+  - Average lines per file
 
-- Python 3.7 or higher
-- pip (Python package manager)
+- **Code Analysis**
+  - Lines of code (excluding comments and empty lines)
+  - Comment line count
+  - Empty line count
+  - Code-to-comment ratio
+
+- **Directory Analysis**
+  - Total directories
+  - Directory depth
+  - Empty directories
+  - Directory with most files
+
+- **Filter Statistics**
+  - Files filtered by .gitignore
+  - Files filtered by custom rules
+  - Most effective filter patterns
+
+### User Interface
+- 🎨 Modern, responsive Bootstrap-based dashboard
+- 📈 Real-time processing status
+- 🎉 Interactive success animations
+- 📥 Easy file download
+- 🎯 Custom ignore pattern management
 
 ## Installation
 
 1. Clone the repository:
-   ```bash
-   git clone https://github.com/yourusername/combinecode.git
-   cd combinecode
-   ```
+```bash
+git clone https://github.com/gilzero/combinefile.git
+cd combinefile
+```
 
-2. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
+2. Create a virtual environment and activate it:
+```bash
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+```
+
+3. Install dependencies:
+```bash
+pip install -r requirements.txt
+```
 
 ## Usage
 
 1. Start the server:
-   ```bash
-   uvicorn main:app --reload
-   ```
+```bash
+python main.py
+```
 
 2. Open your browser and navigate to `http://localhost:8000`
 
-3. Use the web interface to:
-   - Specify the target directory
-   - Add custom ignore patterns (optional)
-   - Process and combine files
-   - Download the resulting file
+3. Enter the directory path you want to process (or leave empty for current directory)
 
-## Project Structure
+4. (Optional) Add custom ignore patterns
 
-```
-combinecode/
-├── main.py           # FastAPI application and core logic
-├── requirements.txt  # Python dependencies
-├── static/          # Static assets
-├── templates/       # HTML templates
-├── output/         # Generated files
-└── test_main.http  # API test file
-```
+5. Click "Process Files" and wait for the results
 
-## Dependencies
+6. Download the concatenated file and view the statistics
 
-- FastAPI (>=0.68.0) - Web framework
-- Uvicorn (>=0.15.0) - ASGI server
-- Python-multipart (>=0.0.5) - Form data handling
-- Pathspec (>=0.9.0) - Gitignore pattern matching
-- Aiofiles (>=0.8.0) - Async file operations
-- Jinja2 (>=3.0.0) - Template engine
+## Configuration
 
-## Development
+- Custom ignore patterns support glob syntax (e.g., `*.txt`, `src/**`)
+- The application automatically respects existing `.gitignore` rules
+- Output files are saved in the `output` directory with timestamps
 
-The application uses:
-- FastAPI for the backend API
-- Jinja2 templates for the frontend
-- Async operations for file handling
-- Custom emoji-based logging for better debugging
+## Technical Details
+
+### Architecture
+- FastAPI backend for high performance
+- Async file processing for better scalability
+- Pydantic models for data validation
+- Bootstrap 5 frontend with modern UI components
+
+### File Processing
+- Handles various file types
+- Smart comment detection
+- Efficient line counting
+- Proper error handling
+
+### Statistics Engine
+- Real-time stat calculation
+- Accurate file type detection
+- Directory tree analysis
+- Pattern effectiveness tracking
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## License
 
-This project is open source and available under the MIT License.
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+## Acknowledgments
+
+- Built with FastAPI and Bootstrap
+- Uses pathspec for .gitignore parsing
+- Confetti effects powered by canvas-confetti
