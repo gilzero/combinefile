@@ -13,6 +13,7 @@ import aiofiles
 from datetime import datetime
 import sys
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 
 class EmojiFormatter(logging.Formatter):
     """Custom formatter that adds emojis to log messages based on level."""
@@ -76,6 +77,10 @@ file_handler.setFormatter(formatter)
 logging.basicConfig(level=logging.INFO, handlers=[console_handler, file_handler])
 logger = logging.getLogger(__name__)
 
+class ConcatenateRequest(BaseModel):
+    directory: str = "."
+    additional_ignores: List[str] = []
+
 app = FastAPI(title="File Concatenator", description="Concatenates files respecting .gitignore rules")
 templates = Jinja2Templates(directory="templates")
 
@@ -93,14 +98,20 @@ class FileConcatenationError(Exception):
     pass
 
 class FileConcatenator:
-    def __init__(self, base_dir: str = "."):
+    def __init__(self, base_dir: str = ".", additional_ignores: List[str] = None):
         try:
             logger.info(f"Initializing concatenator for directory: {base_dir}")
             self.base_dir = pathlib.Path(base_dir).resolve()
             if not self.base_dir.exists():
                 raise FileConcatenationError(f"Directory does not exist: {base_dir}")
             
-            self.gitignore_spec = self._load_gitignore()
+            self.additional_ignores = additional_ignores or []
+            logger.info(f"Additional ignore patterns: {self.additional_ignores}")
+            
+            # Load gitignore patterns and combine with additional ignores
+            gitignore_patterns = self._load_gitignore()
+            all_patterns = gitignore_patterns + self.additional_ignores
+            self.gitignore_spec = PathSpec.from_lines(GitWildMatchPattern, all_patterns)
             
             # Create output directory if it doesn't exist
             self.output_dir = pathlib.Path(__file__).parent / "output"
@@ -111,7 +122,7 @@ class FileConcatenator:
             logger.error(f"Initialization failed: {str(e)}")
             raise FileConcatenationError(f"Initialization error: {str(e)}")
 
-    def _load_gitignore(self) -> PathSpec:
+    def _load_gitignore(self) -> List[str]:
         """Load .gitignore patterns if the file exists."""
         gitignore_path = self.base_dir / ".gitignore"
         patterns = []
@@ -128,7 +139,7 @@ class FileConcatenator:
             logger.error(f"Failed to read gitignore: {e}")
             logger.warning("Proceeding with empty gitignore patterns")
         
-        return PathSpec.from_lines(GitWildMatchPattern, patterns)
+        return patterns
 
     async def concatenate_files(self) -> str:
         """Concatenate all files in directory respecting .gitignore rules."""
@@ -234,17 +245,22 @@ async def home(request: Request):
     return templates.TemplateResponse("index.html", {"request": request})
 
 @app.post("/concatenate")
-async def concatenate_files(directory: str = "."):
+async def concatenate_files(request: ConcatenateRequest):
     """
     Concatenate all files in the specified directory and its subdirectories,
-    respecting .gitignore rules.
+    respecting .gitignore rules and additional ignore patterns.
     """
-    logger.info(f"Received concatenation request for: {directory}")
+    logger.info(f"Received concatenation request for: {request.directory}")
+    logger.info(f"Additional ignore patterns: {request.additional_ignores}")
+    
     try:
-        if not directory or directory.isspace():
-            directory = "."
+        if not request.directory or request.directory.isspace():
+            request.directory = "."
             
-        concatenator = FileConcatenator(directory)
+        concatenator = FileConcatenator(
+            request.directory, 
+            additional_ignores=request.additional_ignores
+        )
         output_file = await concatenator.concatenate_files()
         filename = os.path.basename(output_file)
         logger.info(f"Successfully created: {filename}")

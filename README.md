@@ -1,81 +1,78 @@
-# File Concatenator
+# CombineCode
 
-A FastAPI-based application that concatenates files while respecting `.gitignore` rules. This tool traverses directories and combines file contents into a single text file, making it useful for code analysis, backup, or documentation purposes.
+A modern web application for intelligent file concatenation, built with FastAPI. CombineCode helps you combine multiple files while respecting `.gitignore` rules and custom ignore patterns.
 
 ## Features
 
-- 📁 Recursive directory traversal
-- 🚫 Respects `.gitignore` rules
-- ⚡ Asynchronous file operations
-- 🔗 Handles symbolic links
-- 🛡️ Comprehensive error handling
-- 📝 Clear file separation in output
+- 🔍 Smart file concatenation with `.gitignore` support
+- 🎯 Custom file ignore patterns with glob syntax
+- 🎨 Clean web interface
+- ⚡ Asynchronous file processing
+- 📝 Detailed logging with emoji indicators
+- 🔒 Secure file handling with error protection
 
-## Requirements
+## Prerequisites
 
-- Python 3.7+
-- FastAPI
-- uvicorn
-- Other dependencies listed in `requirements.txt`
+- Python 3.7 or higher
+- pip (Python package manager)
 
 ## Installation
 
-1. Clone the repository
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/yourusername/combinecode.git
+   cd combinecode
+   ```
+
 2. Install dependencies:
-```bash
-pip install -r requirements.txt
-```
+   ```bash
+   pip install -r requirements.txt
+   ```
 
 ## Usage
 
 1. Start the server:
-```bash
-uvicorn main:app --reload
+   ```bash
+   uvicorn main:app --reload
+   ```
+
+2. Open your browser and navigate to `http://localhost:8000`
+
+3. Use the web interface to:
+   - Specify the target directory
+   - Add custom ignore patterns (optional)
+   - Process and combine files
+   - Download the resulting file
+
+## Project Structure
+
+```
+combinecode/
+├── main.py           # FastAPI application and core logic
+├── requirements.txt  # Python dependencies
+├── static/          # Static assets
+├── templates/       # HTML templates
+├── output/         # Generated files
+└── test_main.http  # API test file
 ```
 
-2. The server will start at `http://localhost:8000`
+## Dependencies
 
-3. Access the API:
-   - Interactive API documentation: `http://localhost:8000/docs`
-   - Alternative API documentation: `http://localhost:8000/redoc`
+- FastAPI (>=0.68.0) - Web framework
+- Uvicorn (>=0.15.0) - ASGI server
+- Python-multipart (>=0.0.5) - Form data handling
+- Pathspec (>=0.9.0) - Gitignore pattern matching
+- Aiofiles (>=0.8.0) - Async file operations
+- Jinja2 (>=3.0.0) - Template engine
 
-### API Endpoints
+## Development
 
-#### POST /concatenate
-Concatenates all files in the specified directory (and subdirectories), respecting `.gitignore` rules.
-
-- **Parameters**:
-  - `directory` (optional): Target directory path (defaults to current directory)
-- **Returns**: Text file containing concatenated contents
-
-Example using curl:
-```bash
-curl -X POST "http://localhost:8000/concatenate" -H "accept: text/plain" > concatenated_files.txt
-```
-
-## Output Format
-
-The concatenated output file includes clear separators between files:
-```
-================================================================================
-File: path/to/file1.txt
-================================================================================
-[Contents of file1.txt]
-
-================================================================================
-File: path/to/file2.py
-================================================================================
-[Contents of file2.py]
-```
-
-## Error Handling
-
-The application includes comprehensive error handling for:
-- File access issues
-- Invalid directories
-- Malformed `.gitignore` files
-- Encoding issues
+The application uses:
+- FastAPI for the backend API
+- Jinja2 templates for the frontend
+- Async operations for file handling
+- Custom emoji-based logging for better debugging
 
 ## License
 
-MIT License
+This project is open source and available under the MIT License.
