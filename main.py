@@ -14,6 +14,7 @@ from datetime import datetime
 import sys
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+import json
 
 class EmojiFormatter(logging.Formatter):
     """Custom formatter that adds emojis to log messages based on level."""
@@ -108,9 +109,35 @@ class FileConcatenator:
             self.additional_ignores = additional_ignores or []
             logger.info(f"Additional ignore patterns: {self.additional_ignores}")
             
+            # Initialize statistics
+            self.stats = {
+                'file_stats': {
+                    'total_files': 0,
+                    'processed_files': 0,
+                    'skipped_files': 0,
+                    'file_types': {},
+                    'largest_file': {'path': None, 'size': 0},
+                    'total_size': 0,
+                    'total_lines': 0,
+                    'empty_lines': 0,
+                    'comment_lines': 0
+                },
+                'dir_stats': {
+                    'total_dirs': 0,
+                    'max_depth': 0,
+                    'dirs_with_most_files': {'path': None, 'count': 0},
+                    'empty_dirs': 0
+                },
+                'filter_stats': {
+                    'gitignore_filtered': 0,
+                    'custom_filtered': 0,
+                    'pattern_matches': {}  # Pattern -> count of files filtered
+                }
+            }
+            
             # Load gitignore patterns and combine with additional ignores
-            gitignore_patterns = self._load_gitignore()
-            all_patterns = gitignore_patterns + self.additional_ignores
+            self.gitignore_patterns = self._load_gitignore()
+            all_patterns = self.gitignore_patterns + self.additional_ignores
             self.gitignore_spec = PathSpec.from_lines(GitWildMatchPattern, all_patterns)
             
             # Create output directory if it doesn't exist
@@ -141,21 +168,107 @@ class FileConcatenator:
         
         return patterns
 
+    def _is_comment_line(self, line: str) -> bool:
+        """Check if a line is a comment based on common comment markers."""
+        comment_markers = ['#', '//', '/*', '*', '<!--', '-->', '"""', "'''"]
+        stripped = line.strip()
+        return any(stripped.startswith(marker) for marker in comment_markers)
+
+    def _update_file_stats(self, file_path: pathlib.Path, content: str):
+        """Update file statistics for a processed file."""
+        # Update file type stats
+        file_type = file_path.suffix or 'no_extension'
+        self.stats['file_stats']['file_types'][file_type] = \
+            self.stats['file_stats']['file_types'].get(file_type, 0) + 1
+
+        # Update size stats
+        file_size = file_path.stat().st_size
+        self.stats['file_stats']['total_size'] += file_size
+        if file_size > self.stats['file_stats']['largest_file']['size']:
+            self.stats['file_stats']['largest_file'] = {
+                'path': str(file_path.relative_to(self.base_dir)),
+                'size': file_size
+            }
+
+        # Update line stats
+        lines = content.splitlines()
+        self.stats['file_stats']['total_lines'] += len(lines)
+        self.stats['file_stats']['empty_lines'] += sum(1 for line in lines if not line.strip())
+        self.stats['file_stats']['comment_lines'] += sum(1 for line in lines if self._is_comment_line(line))
+
+    def _update_dir_stats(self, current_path: pathlib.Path, files_count: int):
+        """Update directory statistics."""
+        self.stats['dir_stats']['total_dirs'] += 1
+        
+        # Update depth stats
+        relative_path = current_path.relative_to(self.base_dir)
+        depth = len(relative_path.parts)
+        self.stats['dir_stats']['max_depth'] = max(self.stats['dir_stats']['max_depth'], depth)
+        
+        # Update directory with most files
+        if files_count > self.stats['dir_stats']['dirs_with_most_files']['count']:
+            self.stats['dir_stats']['dirs_with_most_files'] = {
+                'path': str(relative_path),
+                'count': files_count
+            }
+        
+        # Update empty directory count
+        if files_count == 0:
+            self.stats['dir_stats']['empty_dirs'] += 1
+
+    def _update_filter_stats(self, file_path: pathlib.Path, is_gitignore: bool):
+        """Update filter statistics when a file is ignored."""
+        rel_path = str(file_path.relative_to(self.base_dir))
+        
+        if is_gitignore:
+            self.stats['filter_stats']['gitignore_filtered'] += 1
+            # Check which gitignore pattern matched
+            for pattern in self.gitignore_patterns:
+                if PathSpec.from_lines(GitWildMatchPattern, [pattern]).match_file(rel_path):
+                    self.stats['filter_stats']['pattern_matches'][pattern] = \
+                        self.stats['filter_stats']['pattern_matches'].get(pattern, 0) + 1
+        else:
+            self.stats['filter_stats']['custom_filtered'] += 1
+            # Check which custom pattern matched
+            for pattern in self.additional_ignores:
+                if PathSpec.from_lines(GitWildMatchPattern, [pattern]).match_file(rel_path):
+                    self.stats['filter_stats']['pattern_matches'][pattern] = \
+                        self.stats['filter_stats']['pattern_matches'].get(pattern, 0) + 1
+
+    def _is_ignored(self, path: pathlib.Path) -> bool:
+        """Check if path should be ignored based on .gitignore rules."""
+        try:
+            rel_path = str(path.relative_to(self.base_dir))
+            
+            # Check gitignore patterns first
+            for pattern in self.gitignore_patterns:
+                if PathSpec.from_lines(GitWildMatchPattern, [pattern]).match_file(rel_path):
+                    self._update_filter_stats(path, True)
+                    return True
+            
+            # Then check additional patterns
+            for pattern in self.additional_ignores:
+                if PathSpec.from_lines(GitWildMatchPattern, [pattern]).match_file(rel_path):
+                    self._update_filter_stats(path, False)
+                    return True
+            
+            return False
+        except Exception as e:
+            logger.error(f"Failed to check ignore status: {path}, {str(e)}")
+            return False
+
     async def concatenate_files(self) -> str:
         """Concatenate all files in directory respecting .gitignore rules."""
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         output_file = self.output_dir / f"output_{timestamp}.txt"
         
         logger.info(f"Starting file concatenation to: {output_file}")
-        total_files = 0
-        processed_files = 0
-        skipped_files = 0
         
         try:
             async with aiofiles.open(output_file, mode="w") as outfile:
                 files = self._walk_directory()
-                total_files = len(files)
-                logger.info(f"Found {total_files} files to process")
+                self.stats['file_stats']['total_files'] = len(files)
+                logger.info(f"Found {len(files)} files to process")
                 
                 for file_path in files:
                     try:
@@ -171,19 +284,30 @@ class FileConcatenator:
                                 content = await infile.read()
                                 await outfile.write(content)
                                 await outfile.write("\n")
-                            processed_files += 1
-                            logger.debug(f"Successfully processed: {rel_path}")
+                                
+                                # Update statistics
+                                self._update_file_stats(file_path, content)
+                                self.stats['file_stats']['processed_files'] += 1
                             
+                            logger.debug(f"Successfully processed: {rel_path}")
                         else:
                             logger.debug(f"Skipping non-regular file: {file_path}")
-                            skipped_files += 1
+                            self.stats['file_stats']['skipped_files'] += 1
                             
                     except Exception as e:
                         logger.error(f"Failed to process file {file_path}: {e}")
-                        skipped_files += 1
+                        self.stats['file_stats']['skipped_files'] += 1
             
-            logger.info(f"Concatenation complete! Processed: {processed_files}, "
-                       f"Skipped: {skipped_files}, Total: {total_files}")
+            # Calculate averages
+            if self.stats['file_stats']['processed_files'] > 0:
+                self.stats['file_stats']['avg_file_size'] = \
+                    self.stats['file_stats']['total_size'] / self.stats['file_stats']['processed_files']
+                self.stats['file_stats']['avg_lines_per_file'] = \
+                    self.stats['file_stats']['total_lines'] / self.stats['file_stats']['processed_files']
+            
+            logger.info(f"Concatenation complete! Processed: {self.stats['file_stats']['processed_files']}, "
+                       f"Skipped: {self.stats['file_stats']['skipped_files']}, "
+                       f"Total: {self.stats['file_stats']['total_files']}")
             return str(output_file)
             
         except Exception as e:
@@ -202,13 +326,11 @@ class FileConcatenator:
             for root, dirs, filenames in os.walk(self.base_dir):
                 root_path = pathlib.Path(root)
                 
+                # Update directory statistics
+                self._update_dir_stats(root_path, len(filenames))
+                
                 # Filter out ignored directories
-                original_dir_count = len(dirs)
                 dirs[:] = [d for d in dirs if not self._is_ignored(root_path / d)]
-                filtered_dir_count = len(dirs)
-                if original_dir_count != filtered_dir_count:
-                    logger.debug(f"Filtered {original_dir_count - filtered_dir_count} "
-                               f"directories in {root_path}")
                 
                 # Filter and collect non-ignored files
                 for filename in filenames:
@@ -225,18 +347,6 @@ class FileConcatenator:
             error_msg = f"Directory scan failed: {str(e)}"
             logger.error(error_msg)
             raise FileConcatenationError(error_msg)
-
-    def _is_ignored(self, path: pathlib.Path) -> bool:
-        """Check if path should be ignored based on .gitignore rules."""
-        try:
-            rel_path = str(path.relative_to(self.base_dir))
-            is_ignored = self.gitignore_spec.match_file(rel_path)
-            if is_ignored:
-                logger.debug(f"Ignoring path: {rel_path}")
-            return is_ignored
-        except Exception as e:
-            logger.error(f"Failed to check ignore status: {path}, {str(e)}")
-            return False
 
 @app.get("/", response_class=HTMLResponse)
 async def home(request: Request):
@@ -264,10 +374,54 @@ async def concatenate_files(request: ConcatenateRequest):
         output_file = await concatenator.concatenate_files()
         filename = os.path.basename(output_file)
         logger.info(f"Successfully created: {filename}")
+        
+        # Format statistics for response
+        stats = {
+            'file_stats': {
+                'total': concatenator.stats['file_stats']['total_files'],
+                'processed': concatenator.stats['file_stats']['processed_files'],
+                'skipped': concatenator.stats['file_stats']['skipped_files'],
+                'by_type': concatenator.stats['file_stats']['file_types'],
+                'largest_file': concatenator.stats['file_stats']['largest_file'],
+                'total_size': concatenator.stats['file_stats']['total_size'],
+                'avg_size': concatenator.stats['file_stats'].get('avg_file_size', 0),
+                'lines': {
+                    'total': concatenator.stats['file_stats']['total_lines'],
+                    'code': (concatenator.stats['file_stats']['total_lines'] - 
+                            concatenator.stats['file_stats']['empty_lines'] - 
+                            concatenator.stats['file_stats']['comment_lines']),
+                    'comments': concatenator.stats['file_stats']['comment_lines'],
+                    'empty': concatenator.stats['file_stats']['empty_lines'],
+                    'avg_per_file': concatenator.stats['file_stats'].get('avg_lines_per_file', 0)
+                }
+            },
+            'directory_stats': {
+                'total': concatenator.stats['dir_stats']['total_dirs'],
+                'empty': concatenator.stats['dir_stats']['empty_dirs'],
+                'max_depth': concatenator.stats['dir_stats']['max_depth'],
+                'most_files': concatenator.stats['dir_stats']['dirs_with_most_files']
+            },
+            'filter_stats': {
+                'gitignore_filtered': concatenator.stats['filter_stats']['gitignore_filtered'],
+                'custom_filtered': concatenator.stats['filter_stats']['custom_filtered'],
+                'most_effective_patterns': sorted(
+                    [{'pattern': k, 'files_filtered': v} 
+                     for k, v in concatenator.stats['filter_stats']['pattern_matches'].items()],
+                    key=lambda x: x['files_filtered'],
+                    reverse=True
+                )[:5]  # Top 5 most effective patterns
+            }
+        }
+        
+        headers = {
+            'X-File-Stats': json.dumps(stats)
+        }
+        
         return FileResponse(
             output_file,
             media_type="text/plain",
-            filename=filename
+            filename=filename,
+            headers=headers
         )
     except FileConcatenationError as e:
         error_msg = f"Concatenation request failed: {str(e)}"

@@ -210,23 +210,222 @@
                 const url = window.URL.createObjectURL(blob);
                 const filename = response.headers.get('content-disposition')?.split('filename=')[1] || 'concatenated_files.txt';
                 
+                const stats = JSON.parse(response.headers.get('X-File-Stats') || '{}');
+                
+                // Helper function to format bytes
+                const formatBytes = (bytes) => {
+                    if (bytes === 0) return '0 Bytes';
+                    const k = 1024;
+                    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+                    const i = Math.floor(Math.log(bytes) / Math.log(k));
+                    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+                };
+
+                // Helper function to format numbers with commas
+                const formatNumber = (num) => {
+                    return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+                };
+
                 result.innerHTML = `
-                    <div class="alert alert-success success-animate">
-                        <i class="bi bi-check-circle-fill me-2"></i>
-                        Files successfully concatenated!
-                        <div class="mt-3">
-                            <a href="${url}" download="${filename}" class="btn btn-success">
-                                <i class="bi bi-download"></i> Download Result
-                            </a>
+                    <div class="card shadow-sm success-animate">
+                        <div class="card-header bg-success text-white d-flex align-items-center">
+                            <i class="bi bi-check-circle-fill me-2"></i>
+                            <span class="flex-grow-1">Processing Complete!</span>
+                            <button class="btn btn-sm btn-outline-light" onclick="triggerConfetti()">
+                                <i class="bi bi-stars"></i> Celebrate
+                            </button>
                         </div>
-                        ${ignorePatterns.length ? `
-                        <div class="mt-2 small">
-                            <strong>Additional patterns ignored:</strong>
-                            <ul class="mb-0">
-                                ${ignorePatterns.map(p => `<li>${p}</li>`).join('')}
-                            </ul>
+                        <div class="card-body">
+                            <!-- File Processing Overview -->
+                            <div class="row g-3 mb-4">
+                                <div class="col-md-3">
+                                    <div class="card h-100 border-primary">
+                                        <div class="card-body text-center">
+                                            <h6 class="card-subtitle mb-2 text-muted">Files Processed</h6>
+                                            <h2 class="card-title mb-0 text-primary">
+                                                ${formatNumber(stats.file_stats.processed)}
+                                                <small class="text-muted">/ ${formatNumber(stats.file_stats.total)}</small>
+                                            </h2>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="card h-100 border-info">
+                                        <div class="card-body text-center">
+                                            <h6 class="card-subtitle mb-2 text-muted">Total Size</h6>
+                                            <h2 class="card-title mb-0 text-info">
+                                                ${formatBytes(stats.file_stats.total_size)}
+                                            </h2>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="card h-100 border-success">
+                                        <div class="card-body text-center">
+                                            <h6 class="card-subtitle mb-2 text-muted">Lines of Code</h6>
+                                            <h2 class="card-title mb-0 text-success">
+                                                ${formatNumber(stats.file_stats.lines.code)}
+                                            </h2>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="card h-100 border-warning">
+                                        <div class="card-body text-center">
+                                            <h6 class="card-subtitle mb-2 text-muted">Directories</h6>
+                                            <h2 class="card-title mb-0 text-warning">
+                                                ${formatNumber(stats.directory_stats.total)}
+                                            </h2>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Detailed Statistics -->
+                            <div class="row g-3">
+                                <!-- File Types -->
+                                <div class="col-md-4">
+                                    <div class="card h-100">
+                                        <div class="card-header">
+                                            <i class="bi bi-file-earmark-text me-2"></i>File Types
+                                        </div>
+                                        <div class="card-body">
+                                            <div class="list-group list-group-flush">
+                                                ${Object.entries(stats.file_stats.by_type)
+                                                    .sort((a, b) => b[1] - a[1])
+                                                    .map(([type, count]) => `
+                                                        <div class="list-group-item d-flex justify-content-between align-items-center">
+                                                            <span>${type || 'no extension'}</span>
+                                                            <span class="badge bg-primary rounded-pill">${count}</span>
+                                                        </div>
+                                                    `).join('')}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Code Analysis -->
+                                <div class="col-md-4">
+                                    <div class="card h-100">
+                                        <div class="card-header">
+                                            <i class="bi bi-code-square me-2"></i>Code Analysis
+                                        </div>
+                                        <div class="card-body">
+                                            <ul class="list-group list-group-flush">
+                                                <li class="list-group-item d-flex justify-content-between">
+                                                    <span>Code Lines</span>
+                                                    <strong>${formatNumber(stats.file_stats.lines.code)}</strong>
+                                                </li>
+                                                <li class="list-group-item d-flex justify-content-between">
+                                                    <span>Comments</span>
+                                                    <strong>${formatNumber(stats.file_stats.lines.comments)}</strong>
+                                                </li>
+                                                <li class="list-group-item d-flex justify-content-between">
+                                                    <span>Empty Lines</span>
+                                                    <strong>${formatNumber(stats.file_stats.lines.empty)}</strong>
+                                                </li>
+                                                <li class="list-group-item d-flex justify-content-between">
+                                                    <span>Avg. Lines/File</span>
+                                                    <strong>${Math.round(stats.file_stats.lines.avg_per_file)}</strong>
+                                                </li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Filter Statistics -->
+                                <div class="col-md-4">
+                                    <div class="card h-100">
+                                        <div class="card-header">
+                                            <i class="bi bi-funnel me-2"></i>Filter Statistics
+                                        </div>
+                                        <div class="card-body">
+                                            <div class="mb-3">
+                                                <h6 class="text-muted">Files Filtered</h6>
+                                                <div class="d-flex justify-content-between mb-2">
+                                                    <span>.gitignore</span>
+                                                    <strong>${stats.filter_stats.gitignore_filtered}</strong>
+                                                </div>
+                                                <div class="d-flex justify-content-between">
+                                                    <span>Custom Rules</span>
+                                                    <strong>${stats.filter_stats.custom_filtered}</strong>
+                                                </div>
+                                            </div>
+                                            ${stats.filter_stats.most_effective_patterns.length ? `
+                                                <div class="mt-3">
+                                                    <h6 class="text-muted">Most Effective Patterns</h6>
+                                                    <div class="list-group list-group-flush">
+                                                        ${stats.filter_stats.most_effective_patterns.map(({pattern, files_filtered}) => `
+                                                            <div class="list-group-item d-flex justify-content-between align-items-center">
+                                                                <code class="small">${pattern}</code>
+                                                                <span class="badge bg-secondary">${files_filtered}</span>
+                                                            </div>
+                                                        `).join('')}
+                                                    </div>
+                                                </div>
+                                            ` : ''}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Directory Information -->
+                            <div class="row g-3 mt-3">
+                                <div class="col-12">
+                                    <div class="card">
+                                        <div class="card-header">
+                                            <i class="bi bi-folder2-open me-2"></i>Directory Information
+                                        </div>
+                                        <div class="card-body">
+                                            <div class="row">
+                                                <div class="col-md-6">
+                                                    <ul class="list-group list-group-flush">
+                                                        <li class="list-group-item d-flex justify-content-between">
+                                                            <span>Total Directories</span>
+                                                            <strong>${formatNumber(stats.directory_stats.total)}</strong>
+                                                        </li>
+                                                        <li class="list-group-item d-flex justify-content-between">
+                                                            <span>Empty Directories</span>
+                                                            <strong>${formatNumber(stats.directory_stats.empty)}</strong>
+                                                        </li>
+                                                    </ul>
+                                                </div>
+                                                <div class="col-md-6">
+                                                    <ul class="list-group list-group-flush">
+                                                        <li class="list-group-item d-flex justify-content-between">
+                                                            <span>Maximum Depth</span>
+                                                            <strong>${stats.directory_stats.max_depth} levels</strong>
+                                                        </li>
+                                                        <li class="list-group-item d-flex justify-content-between">
+                                                            <span>Directory with Most Files</span>
+                                                            <div class="text-end">
+                                                                <strong>${stats.directory_stats.most_files.count} files</strong>
+                                                                <br>
+                                                                <small class="text-muted">${stats.directory_stats.most_files.path}</small>
+                                                            </div>
+                                                        </li>
+                                                    </ul>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Download Button -->
+                            <div class="mt-4 text-center">
+                                <a href="${url}" download="${filename}" class="btn btn-success btn-lg">
+                                    <i class="bi bi-download me-2"></i>
+                                    Download Combined Files
+                                </a>
+                                <div class="text-muted mt-2">
+                                    <small>
+                                        <i class="bi bi-info-circle me-1"></i>
+                                        Output file size: ${formatBytes(blob.size)}
+                                    </small>
+                                </div>
+                            </div>
                         </div>
-                        ` : ''}
                     </div>`;
                 
                 // Trigger confetti effect
@@ -234,9 +433,20 @@
 
             } catch (error) {
                 result.innerHTML = `
-                    <div class="alert alert-danger">
-                        <i class="bi bi-exclamation-triangle-fill me-2"></i>
-                        Error: ${error.message}
+                    <div class="card shadow-sm border-danger">
+                        <div class="card-header bg-danger text-white">
+                            <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                            Processing Failed
+                        </div>
+                        <div class="card-body">
+                            <div class="text-danger mb-3">
+                                ${error.message}
+                            </div>
+                            <div class="text-muted small">
+                                <i class="bi bi-info-circle me-1"></i>
+                                Please check your input and try again. If the problem persists, try with different ignore patterns.
+                            </div>
+                        </div>
                     </div>`;
             } finally {
                 status.classList.add('d-none');
