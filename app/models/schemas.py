@@ -53,12 +53,28 @@ class FileStats(BaseModel):
                 'additionalProperties': {'type': 'integer'}
             }
 
+class TreeNode(BaseModel):
+    """Model for directory tree visualization."""
+    name: str
+    path: str
+    type: str  # 'file' or 'directory'
+    size: Optional[int] = None
+    children: List['TreeNode'] = []
+    metadata: Dict[str, Any] = {}
+
+    class Config:
+        """Pydantic model configuration."""
+        json_encoders = {
+            pathlib.Path: str
+        }
+
 class DirectoryStats(BaseModel):
     """Model for directory statistics."""
     total_dirs: int = 0
     max_depth: int = 0
     dirs_with_most_files: Dict[str, Union[str, int, None]] = {"path": None, "count": 0}
     empty_dirs: int = 0
+    tree: Optional[TreeNode] = None  # Add tree to DirectoryStats
 
 class FilterStats(BaseModel):
     """Model for filter statistics."""

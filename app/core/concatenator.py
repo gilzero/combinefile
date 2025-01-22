@@ -8,7 +8,8 @@ from datetime import datetime
 
 from app.models.schemas import (
     ConcatenationStats,
-    FileConcatenationError
+    FileConcatenationError,
+    TreeNode
 )
 
 logger = logging.getLogger(__name__)
@@ -151,6 +152,47 @@ class FileConcatenator:
             logger.error(f"Error checking ignore status for {path}: {e}")
             return True
 
+    def _build_directory_tree(self) -> TreeNode:
+        """Build a directory tree structure."""
+        root = TreeNode(
+            name=self.base_dir.name or self.base_dir.absolute(),
+            path=str(self.base_dir),
+            type='directory',
+            children=[]
+        )
+
+        def add_to_tree(current_path: pathlib.Path, node: TreeNode):
+            """Recursively add files and directories to the tree."""
+            try:
+                # Sort entries for consistent display
+                entries = sorted(current_path.iterdir(), key=lambda x: (x.is_file(), x.name.lower()))
+                
+                for entry in entries:
+                    if self._is_ignored(entry):
+                        continue
+                        
+                    is_file = entry.is_file()
+                    child = TreeNode(
+                        name=entry.name,
+                        path=str(entry.relative_to(self.base_dir)),
+                        type='file' if is_file else 'directory',
+                        children=[],
+                        metadata={
+                            'size': entry.stat().st_size if is_file else None,
+                            'extension': entry.suffix.lower() if is_file else None
+                        }
+                    )
+                    
+                    if not is_file:
+                        add_to_tree(entry, child)
+                    
+                    node.children.append(child)
+            except Exception as e:
+                logger.error(f"Error building tree for {current_path}: {e}")
+
+        add_to_tree(self.base_dir, root)
+        return root
+
     async def concatenate_files(self) -> str:
         """Concatenate all files in the directory respecting .gitignore rules."""
         try:
@@ -160,7 +202,17 @@ class FileConcatenator:
             files = self._walk_directory()
             self.stats.file_stats.total_files = len(files)
             
+            # Build directory tree
+            self.stats.dir_stats.tree = self._build_directory_tree()
+            
             async with aiofiles.open(output_file, 'w', encoding='utf-8') as outfile:
+                # Write directory tree visualization
+                await outfile.write("Directory Structure:\n")
+                await outfile.write("===================\n\n")
+                await self._write_tree_visualization(outfile, self.stats.dir_stats.tree)
+                await outfile.write("\n\nFile Contents:\n")
+                await outfile.write("=============\n\n")
+                
                 for file_path in files:
                     try:
                         if self._is_ignored(file_path):
@@ -193,6 +245,35 @@ class FileConcatenator:
         except Exception as e:
             logger.error(f"Concatenation failed: {e}")
             raise FileConcatenationError(f"Concatenation error: {str(e)}")
+
+    async def _write_tree_visualization(self, outfile, node: TreeNode, prefix: str = "", is_last: bool = True):
+        """Write ASCII tree visualization to the output file."""
+        if not node:
+            return
+
+        # Calculate the current line prefix
+        current_prefix = prefix + ("└── " if is_last else "├── ")
+        next_prefix = prefix + ("    " if is_last else "│   ")
+
+        # Add size information for files
+        size_info = ""
+        if node.type == 'file' and node.metadata.get('size') is not None:
+            size = node.metadata['size']
+            if size < 1024:
+                size_info = f" ({size} B)"
+            elif size < 1024 * 1024:
+                size_info = f" ({size/1024:.1f} KB)"
+            else:
+                size_info = f" ({size/(1024*1024):.1f} MB)"
+
+        # Write the current node
+        await outfile.write(f"{current_prefix}{node.name}{size_info}\n")
+
+        # Process children
+        if node.children:
+            for i, child in enumerate(node.children):
+                is_last_child = i == len(node.children) - 1
+                await self._write_tree_visualization(outfile, child, next_prefix, is_last_child)
 
     def _walk_directory(self) -> List[pathlib.Path]:
         """Walk through directory and collect all files."""

@@ -1,6 +1,14 @@
-# File Concatenator
+# File Concatenator v3
 
-A powerful web application that combines multiple files into a single document while providing comprehensive codebase statistics.
+A powerful web application that combines multiple files into a single document while providing comprehensive codebase statistics and visualization.
+
+## New in Version 3
+- 🌳 Enhanced directory tree visualization with file sizes
+- 🎨 Dark/Light theme support with system preference detection
+- 📊 Improved statistics dashboard with modern UI
+- 📷 Export statistics as Image or PDF
+- ♿ Better accessibility support
+- 🎯 Improved ignore pattern management
 
 ## Features
 
@@ -10,7 +18,13 @@ A powerful web application that combines multiple files into a single document w
 - ⚡ Asynchronous file processing for better performance
 - 📊 Comprehensive codebase statistics
 
-### Statistics & Analysis
+### Statistics & Visualization
+- **Interactive Directory Tree**
+  - Visual directory structure
+  - File size information
+  - Color-coded files and directories
+  - Hover effects for better UX
+
 - **File Analysis**
   - Total files processed and skipped
   - File type distribution
@@ -24,22 +38,18 @@ A powerful web application that combines multiple files into a single document w
   - Code-to-comment ratio
 
 - **Directory Analysis**
-  - Total directories
-  - Directory depth
-  - Empty directories
+  - Total directories and depth
+  - Empty directories detection
   - Directory with most files
+  - Complete directory tree
 
-- **Filter Statistics**
-  - Files filtered by .gitignore
-  - Files filtered by custom rules
-  - Most effective filter patterns
-
-### User Interface
-- 🎨 Modern, responsive Bootstrap-based dashboard
-- 📈 Real-time processing status
+### Modern UI/UX
+- 🎨 Dark/Light theme with system preference sync
+- 📱 Fully responsive design
+- 🖼️ Export statistics as Image/PDF
+- ♿ ARIA labels and keyboard navigation
+- 🎯 Enhanced ignore pattern management
 - 🎉 Interactive success animations
-- 📥 Easy file download
-- 🎯 Custom ignore pattern management
 
 ## Installation
 
@@ -71,17 +81,17 @@ python main.py
 
 3. Enter the directory path you want to process (or leave empty for current directory)
 
-4. (Optional) Add custom ignore patterns
+4. (Optional) Add custom ignore patterns using the "Add Pattern" button
 
 5. Click "Process Files" and wait for the results
 
-6. Download the concatenated file and view the statistics
+6. View the statistics, export as Image/PDF, or download the concatenated file
 
-## Configuration
-
-- Custom ignore patterns support glob syntax (e.g., `*.txt`, `src/**`)
-- The application automatically respects existing `.gitignore` rules
-- Output files are saved in the `output` directory with timestamps
+## Known Issues
+- 🐛 Processing spinner animation may not work in some browsers
+- 🐛 Very long file paths might overflow in the directory tree view
+- 🐛 PDF export might fail with very large directory structures
+- ⚠️ Memory usage can be high with extremely large codebases
 
 ## Technical Details
 
@@ -91,17 +101,11 @@ python main.py
 - Pydantic models for data validation
 - Bootstrap 5 frontend with modern UI components
 
-### File Processing
-- Handles various file types
-- Smart comment detection
-- Efficient line counting
-- Proper error handling
-
-### Statistics Engine
-- Real-time stat calculation
-- Accurate file type detection
-- Directory tree analysis
-- Pattern effectiveness tracking
+### Frontend Features
+- Theme detection and persistence
+- Canvas-based PDF/Image export
+- Responsive grid layout
+- Accessible UI components
 
 ## Contributing
 
@@ -113,6 +117,8 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ## Acknowledgments
 
-- Built with FastAPI and Bootstrap
+- Built with FastAPI and Bootstrap 5
 - Uses pathspec for .gitignore parsing
-- Confetti effects powered by canvas-confetti
+- PDF export powered by jsPDF
+- Image export using html2canvas
+- Confetti effects by canvas-confetti

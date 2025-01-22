@@ -1,24 +1,36 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-bs-theme="light">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="File Concatenator - Combine and analyze multiple files with comprehensive statistics">
+    <meta name="theme-color" content="#0d6efd">
     <title>File Concatenator</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.2/font/bootstrap-icons.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <style>
+        :root {
+            --tree-hover-bg: rgba(13, 110, 253, 0.1);
+        }
+
+        [data-bs-theme="dark"] {
+            --tree-hover-bg: rgba(13, 110, 253, 0.2);
+        }
+
         .drag-area {
-            border: 2px dashed #ccc;
+            border: 2px dashed var(--bs-border-color);
             border-radius: 10px;
             padding: 2rem;
             text-align: center;
-            background: #f8f9fa;
+            background: var(--bs-secondary-bg);
             transition: all 0.3s ease;
         }
         .drag-area.active {
-            border-color: #0d6efd;
-            background: #e9ecef;
+            border-color: var(--bs-primary);
+            background: var(--bs-secondary-bg-subtle);
         }
         .file-list {
             max-height: 300px;
@@ -29,11 +41,52 @@
             align-items: center;
             padding: 0.5rem;
             margin: 0.25rem 0;
-            background: #f8f9fa;
+            background: var(--bs-secondary-bg);
             border-radius: 5px;
         }
         .file-item i {
             margin-right: 0.5rem;
+        }
+        .directory-tree {
+            font-family: 'Courier New', Courier, monospace;
+            white-space: pre;
+            overflow-x: auto;
+            padding: 1rem;
+            background: var(--bs-secondary-bg);
+            border-radius: 0.5rem;
+            line-height: 1.5;
+        }
+        .tree-node {
+            display: flex;
+            align-items: baseline;
+            padding: 2px 0;
+            transition: background-color 0.2s;
+        }
+        .tree-node:hover {
+            background-color: var(--tree-hover-bg);
+        }
+        .tree-prefix {
+            color: var(--bs-secondary-color);
+            margin-right: 4px;
+            font-family: monospace;
+            user-select: none;
+        }
+        .tree-name {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .tree-name.file {
+            color: var(--bs-primary);
+        }
+        .tree-name.directory {
+            color: var(--bs-success);
+            font-weight: 500;
+        }
+        .tree-size {
+            color: var(--bs-secondary-color);
+            margin-left: 8px;
+            font-size: 0.9em;
         }
         @keyframes success-animation {
             0% { transform: scale(1); }
@@ -43,31 +96,256 @@
         .success-animate {
             animation: success-animation 0.5s ease-in-out;
         }
+
+        /* Theme toggle styles */
+        .theme-toggle {
+            cursor: pointer;
+            padding: 0.5rem;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background-color 0.3s;
+        }
+        .theme-toggle:hover {
+            background-color: var(--bs-secondary-bg);
+        }
+        .theme-toggle i {
+            font-size: 1.2rem;
+            color: var(--bs-body-color);
+        }
+
+        .export-buttons {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            z-index: 1000;
+        }
+        
+        .export-button {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--bs-primary);
+            color: white;
+            border: none;
+            cursor: pointer;
+            transition: transform 0.2s, background-color 0.2s;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+        }
+        
+        .export-button:hover {
+            transform: scale(1.1);
+            background: var(--bs-primary-dark, #0a58ca);
+        }
+        
+        .export-button i {
+            font-size: 1.2rem;
+        }
+
+        .export-tooltip {
+            position: absolute;
+            right: 100%;
+            top: 50%;
+            transform: translateY(-50%);
+            margin-right: 0.5rem;
+            background: var(--bs-dark);
+            color: white;
+            padding: 0.25rem 0.5rem;
+            border-radius: 0.25rem;
+            font-size: 0.875rem;
+            opacity: 0;
+            transition: opacity 0.2s;
+            pointer-events: none;
+            white-space: nowrap;
+        }
+        
+        .export-button:hover .export-tooltip {
+            opacity: 1;
+        }
+
+        /* Improved focus styles for accessibility */
+        :focus-visible {
+            outline: 3px solid var(--bs-primary) !important;
+            outline-offset: 2px !important;
+            border-radius: 4px;
+        }
+
+        /* Skip to main content link */
+        .skip-link {
+            position: absolute;
+            top: -40px;
+            left: 0;
+            background: var(--bs-primary);
+            color: white;
+            padding: 8px;
+            z-index: 1050;
+            transition: top 0.2s;
+        }
+        
+        .skip-link:focus {
+            top: 0;
+        }
+
+        /* Mobile optimizations */
+        @media (max-width: 768px) {
+            .directory-tree {
+                font-size: 0.75rem;
+                padding: 0.5rem;
+            }
+
+            .export-buttons {
+                bottom: 1rem;
+                right: 1rem;
+            }
+
+            .export-button {
+                width: 40px;
+                height: 40px;
+            }
+
+            .card-body {
+                padding: 0.75rem;
+            }
+
+            .row {
+                --bs-gutter-x: 0.75rem;
+            }
+
+            /* Improved touch targets */
+            .btn, 
+            .form-control,
+            .input-group-text,
+            .list-group-item {
+                min-height: 44px;
+            }
+
+            /* Better spacing for mobile */
+            .container {
+                padding-left: 1rem;
+                padding-right: 1rem;
+            }
+
+            /* Adjust font sizes for better readability */
+            h2 {
+                font-size: 1.5rem;
+            }
+
+            h5 {
+                font-size: 1.1rem;
+            }
+        }
+
+        /* High contrast mode support */
+        @media (forced-colors: active) {
+            .export-button,
+            .theme-toggle,
+            .btn {
+                border: 2px solid currentColor;
+            }
+        }
+
+        /* Reduced motion preferences */
+        @media (prefers-reduced-motion: reduce) {
+            * {
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
+                scroll-behavior: auto !important;
+            }
+        }
+
+        /* Improved color contrast ratios */
+        .text-muted {
+            color: var(--bs-secondary-color) !important;
+        }
+
+        .form-text {
+            color: var(--bs-secondary-color);
+        }
+
+        /* Loading indicator for screen readers */
+        .loading-indicator {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            border: 0;
+        }
+
+        /* Spinner animation */
+        .loading-spinner {
+            display: inline-block;
+            width: 1rem;
+            height: 1rem;
+            border: 2px solid var(--bs-info);
+            border-radius: 50%;
+            border-top-color: transparent;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
     </style>
 </head>
-<body class="bg-light">
-    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+<body class="bg-body">
+    <!-- Skip to main content link -->
+    <a href="#main-content" class="skip-link">Skip to main content</a>
+
+    <nav class="navbar navbar-expand-lg bg-body-tertiary" role="navigation" aria-label="Main navigation">
         <div class="container">
-            <a class="navbar-brand" href="/"><i class="bi bi-files"></i> File Concatenator</a>
+            <a class="navbar-brand" href="/" aria-label="File Concatenator Home">
+                <i class="bi bi-files" aria-hidden="true"></i>
+                <span>File Concatenator</span>
+            </a>
+            <div class="ms-auto">
+                <button class="btn theme-toggle" 
+                        onclick="toggleTheme()" 
+                        aria-label="Toggle color theme"
+                        aria-pressed="false">
+                    <i class="bi bi-sun-fill" data-theme-icon aria-hidden="true"></i>
+                </button>
+            </div>
         </div>
     </nav>
 
-    <div class="container py-5">
+    <main id="main-content" class="container py-5" role="main">
         <div class="row justify-content-center">
-            <div class="col-md-8">
+            <div class="col-12 col-md-8">
                 <div class="card shadow-sm">
                     <div class="card-body">
-                        <h5 class="card-title mb-4">Concatenate Files</h5>
+                        <h1 class="h5 card-title mb-4">Concatenate Files</h1>
                         
                         <div class="mb-4">
                             <label for="directoryPath" class="form-label">Directory Path</label>
                             <div class="input-group">
-                                <input type="text" class="form-control" id="directoryPath" value="/Users/apple/gilzero.dev/EditorDocAIAgentV1" placeholder="Enter directory path">
-                                <button class="btn btn-primary" onclick="concatenateFiles()">
-                                    <i class="bi bi-play-fill"></i> Process Files
+                                <input type="text" 
+                                       class="form-control" 
+                                       id="directoryPath" 
+                                       value="/Users/apple/gilzero.dev/EditorDocAIAgentV1" 
+                                       placeholder="Enter directory path"
+                                       aria-describedby="directoryHelp">
+                                <button class="btn btn-primary" 
+                                        onclick="concatenateFiles()"
+                                        aria-label="Process files in selected directory">
+                                    <i class="bi bi-play-fill" aria-hidden="true"></i>
+                                    <span>Process Files</span>
                                 </button>
                             </div>
-                            <div class="form-text">Leave empty to use current directory</div>
+                            <div class="form-text" id="directoryHelp">Leave empty to use current directory</div>
                         </div>
 
                         <div class="mb-4">
@@ -85,20 +363,38 @@
                             </div>
                         </div>
 
-                        <div id="status" class="alert alert-info d-none">
-                            <div class="spinner-border spinner-border-sm me-2" role="status">
-                                <span class="visually-hidden">Loading...</span>
+                        <div id="status" class="alert alert-info d-none" role="status" aria-live="polite">
+                            <div class="d-flex align-items-center gap-2">
+                                <div class="loading-spinner" role="status" aria-hidden="true"></div>
+                                <span>Processing files...</span>
                             </div>
-                            Processing files...
+                            <div class="loading-indicator" aria-live="assertive">
+                                Processing your files. Please wait...
+                            </div>
                         </div>
 
-                        <div id="result" class="mt-4">
+                        <div id="result" class="mt-4" aria-live="polite">
                             <!-- Results will be shown here -->
                         </div>
                     </div>
                 </div>
             </div>
         </div>
+    </main>
+
+    <div class="export-buttons d-none" id="exportButtons" role="group" aria-label="Export options">
+        <button class="export-button" 
+                onclick="exportAsImage()" 
+                aria-label="Export statistics as image">
+            <i class="bi bi-image" aria-hidden="true"></i>
+            <span class="export-tooltip">Export as Image</span>
+        </button>
+        <button class="export-button" 
+                onclick="exportAsPDF()" 
+                aria-label="Export statistics as PDF">
+            <i class="bi bi-file-pdf" aria-hidden="true"></i>
+            <span class="export-tooltip">Export as PDF</span>
+        </button>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
@@ -242,6 +538,59 @@
                             </button>
                         </div>
                         <div class="card-body">
+                            <!-- Directory Tree Visualization -->
+                            <div class="row g-3 mb-4">
+                                <div class="col-12">
+                                    <div class="card">
+                                        <div class="card-header">
+                                            <i class="bi bi-diagram-3 me-2"></i>Directory Structure
+                                        </div>
+                                        <div class="card-body">
+                                            <div class="directory-tree font-monospace small">
+                                                ${(() => {
+                                                    function renderNode(node, prefix = "", isLast = true) {
+                                                        if (!node) return '';
+                                                        
+                                                        const currentPrefix = prefix + (isLast ? "└── " : "├── ");
+                                                        const nextPrefix = prefix + (isLast ? "    " : "│   ");
+                                                        
+                                                        let sizeInfo = "";
+                                                        if (node.type === 'file' && node.metadata?.size !== null) {
+                                                            const size = node.metadata.size;
+                                                            if (size < 1024) {
+                                                                sizeInfo = ` (${size} B)`;
+                                                            } else if (size < 1024 * 1024) {
+                                                                sizeInfo = ` (${(size/1024).toFixed(1)} KB)`;
+                                                            } else {
+                                                                sizeInfo = ` (${(size/(1024*1024)).toFixed(1)} MB)`;
+                                                            }
+                                                        }
+                                                        
+                                                        let output = `<div class="tree-node">
+                                                            <span class="tree-prefix">${currentPrefix}</span>
+                                                            <span class="tree-name ${node.type}">${node.name}</span>
+                                                            <span class="tree-size">${sizeInfo}</span>
+                                                        </div>`;
+                                                        
+                                                        if (node.children && node.children.length > 0) {
+                                                            node.children.forEach((child, index) => {
+                                                                output += renderNode(child, nextPrefix, index === node.children.length - 1);
+                                                            });
+                                                        }
+                                                        
+                                                        return output;
+                                                    }
+                                                    
+                                                    return stats.dir_stats.tree ? 
+                                                        renderNode(stats.dir_stats.tree) : 
+                                                        '<div class="text-muted">No directory structure available</div>';
+                                                })()}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
                             <!-- File Processing Overview -->
                             <div class="row g-3 mb-4">
                                 <div class="col-md-3">
@@ -456,18 +805,18 @@
 
             } catch (error) {
                 result.innerHTML = `
-                    <div class="card shadow-sm border-danger">
+                    <div class="card shadow-sm border-danger" role="alert">
                         <div class="card-header bg-danger text-white">
-                            <i class="bi bi-exclamation-triangle-fill me-2"></i>
-                            Processing Failed
+                            <i class="bi bi-exclamation-triangle-fill me-2" aria-hidden="true"></i>
+                            <span>Processing Failed</span>
                         </div>
                         <div class="card-body">
                             <div class="text-danger mb-3">
                                 ${error.message}
                             </div>
                             <div class="text-muted small">
-                                <i class="bi bi-info-circle me-1"></i>
-                                Please check your input and try again. If the problem persists, try with different ignore patterns.
+                                <i class="bi bi-info-circle me-1" aria-hidden="true"></i>
+                                <span>Please check your input and try again. If the problem persists, try with different ignore patterns.</span>
                             </div>
                         </div>
                     </div>`;
@@ -475,6 +824,156 @@
                 status.classList.add('d-none');
             }
         }
+
+        // Theme handling
+        function setTheme(theme) {
+            document.documentElement.setAttribute('data-bs-theme', theme);
+            const icon = document.querySelector('[data-theme-icon]');
+            const toggle = document.querySelector('.theme-toggle');
+            icon.className = theme === 'dark' ? 'bi bi-moon-stars-fill' : 'bi bi-sun-fill';
+            toggle.setAttribute('aria-pressed', theme === 'dark');
+            localStorage.setItem('theme', theme);
+        }
+
+        function toggleTheme() {
+            const currentTheme = document.documentElement.getAttribute('data-bs-theme');
+            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+            setTheme(newTheme);
+        }
+
+        // Initialize theme from localStorage or system preference
+        function initializeTheme() {
+            const savedTheme = localStorage.getItem('theme');
+            if (savedTheme) {
+                setTheme(savedTheme);
+            } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+                setTheme('dark');
+            }
+
+            // Listen for system theme changes
+            window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', e => {
+                if (!localStorage.getItem('theme')) {
+                    setTheme(e.matches ? 'dark' : 'light');
+                }
+            });
+        }
+
+        initializeTheme();
+
+        async function exportAsImage() {
+            const result = document.getElementById('result');
+            if (!result.firstElementChild) return;
+
+            try {
+                // Create a clone of the result div to modify
+                const clone = result.cloneNode(true);
+                document.body.appendChild(clone);
+                clone.style.position = 'absolute';
+                clone.style.left = '-9999px';
+                clone.style.transform = 'none';  // Remove any transforms
+
+                // Ensure proper rendering
+                await new Promise(resolve => setTimeout(resolve, 100));
+
+                // Generate canvas
+                const canvas = await html2canvas(clone, {
+                    scale: 2,  // Higher resolution
+                    backgroundColor: getComputedStyle(document.body).backgroundColor,
+                    logging: false,
+                    removeContainer: true
+                });
+
+                // Remove the clone
+                document.body.removeChild(clone);
+
+                // Convert to image and download
+                const image = canvas.toDataURL('image/png');
+                const link = document.createElement('a');
+                link.download = `file-stats-${new Date().toISOString().slice(0,10)}.png`;
+                link.href = image;
+                link.click();
+            } catch (error) {
+                console.error('Error exporting image:', error);
+                alert('Failed to export image. Please try again.');
+            }
+        }
+
+        async function exportAsPDF() {
+            const result = document.getElementById('result');
+            if (!result.firstElementChild) return;
+
+            try {
+                // Create a clone of the result div to modify
+                const clone = result.cloneNode(true);
+                document.body.appendChild(clone);
+                clone.style.position = 'absolute';
+                clone.style.left = '-9999px';
+                clone.style.transform = 'none';
+
+                // Ensure proper rendering
+                await new Promise(resolve => setTimeout(resolve, 100));
+
+                // Generate canvas
+                const canvas = await html2canvas(clone, {
+                    scale: 2,
+                    backgroundColor: getComputedStyle(document.body).backgroundColor,
+                    logging: false,
+                    removeContainer: true
+                });
+
+                // Remove the clone
+                document.body.removeChild(clone);
+
+                // Initialize PDF
+                const { jsPDF } = window.jspdf;
+                const pdf = new jsPDF({
+                    orientation: 'portrait',
+                    unit: 'px',
+                    format: [canvas.width / 2, canvas.height / 2]
+                });
+
+                // Add the image to PDF
+                pdf.addImage(
+                    canvas.toDataURL('image/png'),
+                    'PNG',
+                    0,
+                    0,
+                    canvas.width / 2,
+                    canvas.height / 2
+                );
+
+                // Save the PDF
+                pdf.save(`file-stats-${new Date().toISOString().slice(0,10)}.pdf`);
+            } catch (error) {
+                console.error('Error exporting PDF:', error);
+                alert('Failed to export PDF. Please try again.');
+            }
+        }
+
+        // Show export buttons when results are available
+        const result = document.getElementById('result');
+        const originalSetInnerHTML = Object.getOwnPropertyDescriptor(Element.prototype, 'innerHTML').set;
+        Object.defineProperty(result, 'innerHTML', {
+            set: function(value) {
+                originalSetInnerHTML.call(this, value);
+                const exportButtons = document.getElementById('exportButtons');
+                exportButtons.classList.toggle('d-none', !value.trim());
+            },
+            get: function() {
+                return Element.prototype.innerHTML.get.call(this);
+            }
+        });
+
+        // Enhance keyboard navigation
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                const status = document.getElementById('status');
+                if (!status.classList.contains('d-none')) {
+                    // TODO: Add ability to cancel processing
+                    console.log('Processing cancellation not implemented');
+                }
+            }
+        });
     </script>
 </body>
 </html>
