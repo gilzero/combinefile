@@ -50,3 +50,6 @@ venv
 # git
 .git
 
+# all *.txt files under output directory
+output/*.txt
+
