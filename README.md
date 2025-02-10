@@ -59,7 +59,7 @@ git clone https://github.com/gilzero/combinefile.git
 cd combinefile
 ```
 
-2. Create a virtual environment and activate it:
+2. Create a virtual environment and activate it: (use version 3.11 for better compatibility)
 ```bash
 python -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
